@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Dice Match Empire - Deep Strategic Edition</title>
+    <style>
+        :root { 
+            --bg: #0d0f12; --panel-bg: #161a22; --item-bg: #212836;
+            --gold: #f1c40f; --blue: #3498db; --green: #2ecc71; 
+            --purple: #9b59b6; --red: #e74c3c; --orange: #e67e22;
+        }
+        body { 
+            background: var(--bg); color: #f5f6fa; 
+            font-family: 'Consolas', 'Meiryo', sans-serif; 
+            margin: 0; padding: 0; padding-bottom: 60px;
+        }
+        
+        /* レイアウト */
+        .header { background: #11141a; padding: 15px; border-bottom: 2px solid #2c3e50; position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-around; align-items: center; }
+        .currency { font-size: 1.1rem; font-weight: bold; }
+        .main-money { font-size: 4rem; color: var(--green); font-weight: 900; margin: 15px 0; text-shadow: 0 0 20px rgba(46,204,113,0.1); text-align: center; }
+        
+        .game-container { max-width: 1400px; margin: 0 auto; padding: 0 20px; display: grid; grid-template-columns: 2fr 1fr; gap: 25px; }
+        .left-column { display: flex; flex-direction: column; gap: 20px; }
+        .right-column { display: flex; flex-direction: column; gap: 20px; }
+
+        /* ダイステーブル・ログ */
+        .table-zone { background: radial-gradient(circle, #1a233a, #0d111a); border-radius: 20px; padding: 30px; border: 3px solid #2c3e50; text-align: center; }
+        .dice-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 20px; min-height: 90px; align-items: center; }
+        .dice { width: 65px; height: 65px; background: #ffffff; color: #1e272e; border-radius: 12px; font-size: 2.3rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); border: 3px solid #dcdde1; user-select: none; }
+        .log-display { font-size: 1.4rem; font-weight: bold; color: var(--gold); min-height: 1.5em; text-align: center; }
+        .hand-display { font-size: 1rem; color: var(--blue); height: 1.2em; text-align: center; margin-top: 5px; }
+
+        /* パネル */
+        .panel { background: var(--panel-bg); border-radius: 15px; padding: 20px; border: 1px solid #2c3e50; }
+        .panel-title { font-size: 1.2rem; font-weight: bold; margin-top: 0; margin-bottom: 15px; border-bottom: 2px solid #2c3e50; padding-bottom: 8px; color: var(--blue); display: flex; justify-content: space-between; }
+        
+        /* 各種強化・アイテム */
+        .item-list { display: flex; flex-direction: column; gap: 10px; }
+        .item-row { background: var(--item-bg); padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2d3748; }
+        .item-info { flex-grow: 1; text-align: left; }
+        .item-name { font-weight: bold; color: #ffffff; font-size: 0.95rem; }
+        .item-desc { font-size: 0.75rem; color: #a0aec0; margin-top: 2px; }
+        
+        /* ボタン */
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; min-width: 100px; text-align: center; }
+        .btn-buy { background: var(--green); color: #fff; }
+        .btn-buy:hover:not(:disabled) { background: #27ae60; }
+        .btn-ability { background: var(--orange); color: #fff; }
+        .btn-ability:disabled { background: #4a5568; color: #718096; cursor: not-allowed; }
+        .btn-artifact { background: var(--purple); color: #fff; width: 100%; padding: 12px; font-size: 1rem; margin-top: 10px; }
+        .btn:disabled { background: #2d3748; color: #4a5568; cursor: not-allowed; }
+
+        /* アビリティグリッド */
+        .ability-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* アーティファクト表示 */
+        .artifact-box { background: #1a1c23; border: 1px dashed var(--purple); padding: 12px; border-radius: 8px; margin-top: 10px; text-align: left; max-height: 200px; overflow-y: auto; }
+        .artifact-entry { font-size: 0.8rem; color: #d6b4fc; margin-bottom: 4px; border-bottom: 1px solid #2d3748; padding-bottom: 2px; }
+
+        /* 転生ボックス */
+        .prestige-zone { background: #23123a; border: 2px solid var(--purple); border-radius: 15px; padding: 20px; text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <!-- ヘッダー兼ステータスバー -->
+    <div class="header">
+        <div class="currency">🪙 資金: <span id="hdr-money" style="color:var(--green)">0</span></div>
+        <div class="currency">✨ 転生次数: <span id="hdr-prestige" style="color:var(--purple)">0</span></div>
+        <div class="currency">🔮 転生ポイント (RP): <span id="hdr-rp" style="color:var(--purple)">0</span></div>
+        <div class="currency">🎓 熟練度 (SP): <span id="hdr-sp" style="color:var(--orange)">0</span></div>
+    </div>
+
+    <div class="main-money">¥<span id="txt-money">0</span></div>
+
+    <!-- メインコンテンツ領域 -->
+    <div class="game-container">
+        
+        <!-- 左カラム：ゲーム盤面と通常ショップ -->
+        <div class="left-column">
+            
+            <!-- ダイステーブル -->
+            <div class="table-zone">
+                <div class="dice-container" id="diceBox"></div>
+                <div class="log-display" id="logBox">ダイスをクリックして起動</div>
+                <div class="hand-display" id="handBox">判定結果がここに表示されます</div>
+            </div>
+
+            <!-- 通常強化ショップ -->
+            <div class="panel">
+                <div class="panel-title">⚙️ 帝国インフラ拡張（購入する毎にSP＋1）</div>
+                <div class="item-list" id="normalShop"></div>
+            </div>
+        </div>
+
+        <!-- 右カラム：戦略・アビリティ・アーティファクト -->
+        <div class="right-column">
+            
+            <!-- 転生セクション（解放トリガーを大幅に引き上げ） -->
+            <div class="prestige-zone" id="prestigeSection" style="display: none;">
+                <h3 style="margin-top:0; color:var(--purple);">次元の壁が崩壊可能</h3>
+                <p style="font-size:0.85rem; color:#b8b5ff;">現在の全資産をエネルギーに変換し、<br><b style="font-size:1.2rem; color:white;"><span id="txt-gain-rp">0</span> RP</b> を獲得して次の世界へ転生できます。</p>
+                <button class="btn btn-artifact" onclick="executePrestige()">転生して世界を再構築する</button>
+            </div>
+
+            <!-- アビリティツリー -->
+            <div class="panel">
+                <div class="panel-title">🎓 ダイス・アビリティ（スキル選択）</div>
+                <div class="ability-grid" id="abilityShop"></div>
+            </div>
+
+            <!-- アーティファクト（遺物） -->
+            <div class="panel">
+                <div class="panel-title">🏺 古代の遺物（RPガチャ）</div>
+                <p style="font-size:0.75rem; color:#a0aec0; margin-top:0;">1回 <b>10 RP</b> 消費して、永続的な能力を持つ遺物をランダムに発掘します。</p>
+                <button class="btn btn-artifact" id="btnArtifactRoll" onclick="rollArtifact()">遺物を発掘する（コスト: 10 RP）</button>
+                <div class="artifact-box" id="artifactBox">
+                    <div style="color:#666; font-size:0.8rem; text-align:center;">未発掘</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+    // --- 全ゲーム状態（ステート）の管理 ---
+    let G = {
+        money: 0,
+        rp: 0,
+        sp: 0,
+        prestigeCount: 0,
+        diceCount: 2, // 初期ダイス数：2個
+        isRolling: false,
+        values: [],
+        
+        // 通常強化レベルとコスト
+        lv: { base:0, mult:0, count:2, sync:0, auto:0, speed:0, count3:0, economy:0 },
+        cost: { base:1000, mult:3000, count:15000, sync:8000, auto:2000, speed:4000, count3:1500, economy:5000 },
+        
+        // アビリティの取得状態
+        ability: { oneKill:0, safeWall:0, doubleChain:0, feverMaster:0, harmony:0, intuition:0 },
+        
+        // アーティファクトの所持カウント
+        artifacts: { ring:0, crystal:0, crown:0, scale:0, timeCrystal:0, diceCase:0 },
+        
+        // 内部ゲーム統計
+        consecutiveWins: 0
+    };
+
+    // 通常アイテムの定義データ（全8種類）
+    const normalItemDefs = [
+        { id: 'base', name: '基本運営契約', desc: '役が成立した時の基礎配当金+¥500', growth: 1.6, initCost: 1000 },
+        { id: 'mult', name: '付加価値創造', desc: 'すべての獲得報酬が恒常的に+20%', growth: 1.8, initCost: 3000 },
+        { id: 'count', name: 'ダイス追加増設', desc: 'ダイスの数を1つ増やす（最大12個）', growth: 5.0, initCost: 15000 },
+        { id: 'sync', name: '量子収束システム', desc: '1個目の出目に他のダイスが引き寄せられる確率+4%', growth: 2.2, initCost: 8000 },
+        { id: 'auto', name: '自動自律運用', desc: '自動でダイスを振る（重ねて購入で速度アップ）', growth: 2.0, initCost: 2000 },
+        { id: 'speed', name: '演算クロック加速', desc: 'ダイスの回転演出時間を短縮し時間効率アップ', growth: 1.9, initCost: 4000 },
+        { id: 'count3', name: '出目3の祝福', desc: '出目「3」が含まれる役が成立した時、配当が追加で+¥1,200される', growth: 1.7, initCost: 1500 },
+        { id: 'economy', name: 'エコノミー・ブースター', desc: '所持金が少ないほど報酬UP（所持金1万未満のとき報酬+50%）', growth: 2.3, initCost: 5000 }
+    ];
+
+    // アビリティの定義データ
+    const abilityDefs = [
+        { id: 'safeWall', name: 'リスクヘッジ', desc: '完全にハズレた場合でも、現在のダイス数×¥300の保険金が必ず出る。', cost: 12 },
+        { id: 'oneKill', name: '一撃必殺の覚悟', desc: '出目「6」の配当が4倍になるが、出目「1」の配当がゼロになる。', cost: 15 },
+        { id: 'harmony', name: '偶数・奇数の調和', desc: '「極・奇数統一秩序」「極・偶数統一秩序」の配当が2.5倍に強化される。', cost: 18 },
+        { id: 'feverMaster', name: 'ストレートの極意', desc: '連番役（ストレート）が成立したときの配当倍率を3倍に爆増させる。', cost: 22 },
+        { id: 'intuition', name: '博打打ちの直感', desc: '自動自律運用（オート）の作動間隔が常時15%短縮（高速化）される。', cost: 25 },
+        { id: 'doubleChain', name: '連鎖の悪魔', desc: '連続で役が的中した時、コンボ数に応じて報酬が25%ずつ乗算アップ。', cost: 35 }
+    ];
+
+    // アーティファクトの定義データ
+    const artifactDefs = {
+        ring: { name: '👑 帝王の印章リング', desc: '通常ショップのすべての購入価格が永続的に12%割引される。' },
+        crystal: { name: '🔮 未来予知の水晶球', desc: 'ハズレ判定が出た時、15%の確率で強制的に「全ダイス同調」へ書き換える。' },
+        crown: { name: '👑 叡智のロイヤルクラウン', desc: '転生時、失われる通常強化のレベルを各15%の確率でそのまま維持する。' },
+        scale: { name: '⚖️ 黄金の資本天秤', desc: '転生時の初期所持金が、保有している遺物1個につき+¥30,000される。' },
+        timeCrystal: { name: '⏳ 時の結晶シリンダー', desc: '転生時、通常は全リセットされる「熟練度(SP)」の15%を次回へ持ち越す。' },
+        diceCase: { name: '🍀 運命のダイスケース', desc: '転生した直後の初期ダイス数が永続的に+1個される（重複可能）。' }
+    };
+
+    // --- 初期化処理 ---
+    function init() {
+        buildShopUI();
+        buildAbilityUI();
+        renderDice();
+        updateUI();
+        startGameLoop();
+    }
+
+    function buildShopUI() {
+        const container = document.getElementById('normalShop');
+        container.innerHTML = '';
+        normalItemDefs.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'item-row';
+            row.innerHTML = `
+                <div class="item-info">
+                    <span class="item-name">${item.name} <span id="lv-${item.id}">Lv.0</span></span>
+                    <div class="item-desc">${item.desc}</div>
+                </div>
+                <button class="btn btn-buy" id="btn-${item.id}" onclick="buyNormal('${item.id}')">¥0</button>
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    function buildAbilityUI() {
+        const container = document.getElementById('abilityShop');
+        container.innerHTML = '';
+        abilityDefs.forEach(ab => {
+            const block = document.createElement('div');
+            block.className = 'item-row';
+            block.style.flexDirection = 'column';
+            block.style.alignItems = 'flex-start';
+            block.style.gap = '8px';
+            block.innerHTML = `
+                <div style="text-align:left;">
+                    <span class="item-name" id="abname-${ab.id}" style="color:var(--orange);">${ab.name}</span>
+                    <div class="item-desc">${ab.desc}</div>
+                    <div style="font-size:0.75rem; color:var(--gold); margin-top:3px;">必要コスト: ${ab.cost} SP</div>
+                </div>
+                <button class="btn btn-ability" id="abbtn-${ab.id}" style="width:100%;" onclick="unlockAbility('${ab.id}', ${ab.cost})">習得する</button>
+            `;
+            container.appendChild(block);
+        });
+    }
+
+    // --- ダイス制御 ---
+    function renderDice() {
+        const box = document.getElementById('diceBox');
+        box.innerHTML = '';
+        for (let i = 0; i < G.diceCount; i++) {
+            const d = document.createElement('div');
+            d.className = 'dice';
+            d.id = `dice-${i}`;
+            d.textContent = G.values[i] || '1';
+            d.onclick = playerTriggerRoll;
+            box.appendChild(d);
+        }
+    }
+
+    function playerTriggerRoll() {
+        if (G.isRolling) return;
+        executeRoll();
+    }
+
+    function executeRoll() {
+        G.isRolling = true;
+        let rollDuration = Math.max(2, 10 - G.lv.speed); 
+        let counter = 0;
+
+        let finalValues = [];
+        let firstDice = Math.floor(Math.random() * 6) + 1;
+        finalValues[0] = firstDice;
+
+        let syncChance = G.lv.sync * 0.04;
+
+        for (let i = 1; i < G.diceCount; i++) {
+            if (Math.random() < syncChance) {
+                finalValues[i] = firstDice; 
+            } else {
+                finalValues[i] = Math.floor(Math.random() * 6) + 1;
+            }
+        }
+
+        const interval = setInterval(() => {
+            for (let i = 0; i < G.diceCount; i++) {
+                document.getElementById(`dice-${i}`).textContent = Math.floor(Math.random() * 6) + 1;
+            }
+            counter++;
+            if (counter > rollDuration) {
+                clearInterval(interval);
+                
+                G.values = finalValues;
+                for (let i = 0; i < G.diceCount; i++) {
+                    document.getElementById(`dice-${i}`).textContent = G.values[i];
+                }
+                
+                judgeHands();
+            }
+        }, 60);
+    }
+
+    // --- 役判定 ---
+    function judgeHands() {
+        let moneyGained = 0;
+        let handName = "ハズレ";
+        let isWin = false;
+        let has3 = false;
+
+        let counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+        G.values.forEach(v => {
+            counts[v]++;
+            if(v === 3) has3 = true;
+        });
+
+        let baseMultiplier = (1 + G.lv.mult * 0.20); 
+
+        if (G.lv.economy > 0 && G.money < 10000) {
+            baseMultiplier += (G.lv.economy * 0.50);
+        }
+
+        // 1. 各種ゾロ目の計算
+        let pairProfit = 0;
+        for (let num = 1; num <= 6; num++) {
+            let c = counts[num];
+            if (c >= 2) {
+                isWin = true;
+                let combinations = (c * (c - 1)) / 2;
+                let diceBaseValue = num * 150 + (G.lv.base * 500);
+
+                if (G.ability.oneKill === 1) {
+                    if (num === 6) diceBaseValue *= 4;
+                    if (num === 1) diceBaseValue = 0;
+                }
+
+                pairProfit += Math.floor(diceBaseValue * baseMultiplier * combinations);
+                if (c === G.diceCount) handName = `全ダイス神同調 (X${c})`;
+                else if (c >= 3) handName = `${c}マルチコンボ成立`;
+                else if (handName === "ハズレ") handName = "ダイスペア成立";
+            }
+        }
+        moneyGained += pairProfit;
+
+        // 2. ストレート
+        let maxStraightLength = 0;
+        let currentStraightLength = 0;
+        
+        for(let i=1; i<=6; i++) {
+            if(counts[i] > 0) {
+                currentStraightLength++;
+                if(currentStraightLength > maxStraightLength) maxStraightLength = currentStraightLength;
+            } else {
+                currentStraightLength = 0;
+            }
+        }
+
+        if (maxStraightLength >= 3) {
+            isWin = true;
+            let straightBonus = maxStraightLength * 2000 * baseMultiplier;
+            if (G.ability.feverMaster === 1) {
+                straightBonus *= 3;
+            }
+            moneyGained += Math.floor(straightBonus);
+            handName = `${maxStraightLength}連ストレート星配列`;
+        }
+
+        // 3. オールオッド / オールイーブン
+        let allOdd = G.values.every(v => v % 2 !== 0);
+        let allEven = G.values.every(v => v % 2 === 0);
+        if ((allOdd || allEven) && G.diceCount >= 4) {
+            isWin = true;
+            let unityBonus = G.diceCount * 1500 * baseMultiplier;
+            if (G.ability.harmony === 1) {
+                unityBonus *= 2.5;
+            }
+            moneyGained += Math.floor(unityBonus);
+            handName = allOdd ? "極・奇数統一秩序" : "極・偶数統一秩序";
+        }
+
+        if (isWin && has3 && G.lv.count3 > 0) {
+            let bonus3 = G.lv.count3 * 1200;
+            moneyGained += bonus3;
+            handName += " (＋3の祝福)";
+        }
+
+        // 4. 水晶球による救済
+        if (!isWin && G.artifacts.crystal > 0) {
+            let 救済確率 = G.artifacts.crystal * 0.15;
+            if (Math.random() < 救済確率) {
+                let rescueNum = Math.floor(Math.random() * 6) + 1;
+                G.values.fill(rescueNum);
+                for (let i = 0; i < G.diceCount; i++) {
+                    document.getElementById(`dice-${i}`).textContent = rescueNum;
+                }
+                G.isRolling = false;
+                document.getElementById('logBox').textContent = "🔮 水晶球が未来を書き換えた！";
+                judgeHands(); 
+                return;
+            }
+        }
+
+        // --- 報酬適用 ---
+        if (isWin) {
+            G.consecutiveWins++;
+            
+            if (G.ability.doubleChain === 1 && G.consecutiveWins > 1) {
+                let chainMult = 1 + ((G.consecutiveWins - 1) * 0.25);
+                moneyGained = Math.floor(moneyGained * chainMult);
+                handName += ` (${G.consecutiveWins}連鎖コアブースト)`;
+            }
+
+            G.money += moneyGained;
+            document.getElementById('logBox').textContent = `利益獲得!! +¥${moneyGained.toLocaleString()}`;
+            document.getElementById('logBox').style.color = "var(--green)";
+            document.getElementById('handBox').textContent = `【成立役】 ${handName}`;
+        } else {
+            G.consecutiveWins = 0;
+            
+            if (G.ability.safeWall === 1) {
+                let safeMoney = G.diceCount * 300;
+                G.money += safeMoney;
+                document.getElementById('logBox').textContent = `ハズレ（保険適用: +¥${safeMoney}）`;
+                document.getElementById('logBox').style.color = "var(--blue)";
+            } else {
+                document.getElementById('logBox').textContent = "ハズレ（収益なし）";
+                document.getElementById('logBox').style.color = "var(--red)";
+            }
+            document.getElementById('handBox').textContent = "役が成立しませんでした。";
+        }
+
+        G.isRolling = false;
+        updateUI();
+    }
+
+    // --- ショップロジック ---
+    function buyNormal(id) {
+        let currentCost = G.cost[id];
+        
+        if (G.artifacts.ring > 0) {
+            let discount = Math.min(0.60, G.artifacts.ring * 0.12);
+            currentCost = Math.floor(currentCost * (1 - discount));
+        }
+
+        if (G.money >= currentCost) {
+            G.money -= currentCost;
+            G.lv[id]++;
+            G.sp++; 
+
+            const def = normalItemDefs.find(item => item.id === id);
+            G.cost[id] = Math.floor(G.cost[id] * def.growth);
+
+            if (id === 'count') {
+                G.diceCount = Math.min(12, G.diceCount + 1);
+                renderDice();
+            }
+
+            updateUI();
+            if (id === 'auto') {
+                startGameLoop();
+            }
+        }
+    }
+
+    function unlockAbility(id, cost) {
+        if (G.sp >= cost && G.ability[id] === 0) {
+            G.sp -= cost;
+            G.ability[id] = 1;
+            updateUI();
+        }
+    }
+
+    // --- アーティファクトガチャ ---
+    function rollArtifact() {
+        if (G.rp >= 10) {
+            G.rp -= 10;
+            const keys = Object.keys(artifactDefs);
+            const randomKey = keys[Math.floor(Math.random() * keys.length)];
+            G.artifacts[randomKey]++;
+            
+            document.getElementById('logBox').textContent = `🏺 遺物発見: ${artifactDefs[randomKey].name}`;
+            document.getElementById('logBox').style.color = "var(--purple)";
+            
+            updateUI();
+            renderArtifacts();
+        }
+    }
+
+    function renderArtifacts() {
+        const box = document.getElementById('artifactBox');
+        box.innerHTML = '';
+        let hasAny = false;
+
+        for (let key in G.artifacts) {
+            if (G.artifacts[key] > 0) {
+                hasAny = true;
+                const div = document.createElement('div');
+                div.className = 'artifact-entry';
+                div.innerHTML = `<b>${artifactDefs[key].name}</b> (保有数: ${G.artifacts[key]})<br><span style="color:#aaa;">${artifactDefs[key].desc}</span>`;
+                box.appendChild(div);
+            }
+        }
+        if (!hasAny) {
+            box.innerHTML = `<div style="color:#666; font-size:0.8rem; text-align:center;">未発掘</div>`;
+        }
+    }
+
+    // --- 転生（プレステージ） ---
+    function executePrestige() {
+        // RP獲得効率を後半の資金規模（1/50万）に調整
+        let gainRP = Math.floor(G.money / 500000);
+        if (gainRP < 1) return;
+
+        if (confirm(`蓄積した ¥${Math.floor(G.money).toLocaleString()} を手放し、高次元データへ昇華しますか？\n獲得できるRP: ${gainRP}`)) {
+            G.rp += gainRP;
+            G.prestigeCount++;
+
+            let totalArtifacts = Object.values(G.artifacts).reduce((a, b) => a + b, 0);
+            let startCashBonus = totalArtifacts * 30000 * G.artifacts.scale;
+
+            let keepChance = G.artifacts.crown * 0.15;
+            normalItemDefs.forEach(def => {
+                if (Math.random() >= keepChance) {
+                    G.lv[def.id] = 0;
+                    G.cost[def.id] = def.initCost;
+                }
+            });
+
+            let keptSP = 0;
+            if (G.artifacts.timeCrystal > 0) {
+                keptSP = Math.floor(G.sp * (G.artifacts.timeCrystal * 0.15));
+            }
+
+            G.diceCount = 2 + G.artifacts.diceCase + (G.lv.count || 0); 
+            G.money = startCashBonus;
+            G.sp = keptSP; 
+            
+            for (let ab in G.ability) G.ability[ab] = 0;
+
+            renderDice();
+            buildShopUI();
+            updateUI();
+            startGameLoop();
+            
+            document.getElementById('logBox').textContent = "世界が再構築され、新たな因果が始まった。";
+            document.getElementById('logBox').style.color = "var(--purple)";
+        }
+    }
+
+    // --- 全画面同期更新 ---
+    function updateUI() {
+        document.getElementById('hdr-money').textContent = Math.floor(G.money).toLocaleString();
+        document.getElementById('hdr-prestige').textContent = G.prestigeCount;
+        document.getElementById('hdr-rp').textContent = G.rp;
+        document.getElementById('hdr-sp').textContent = G.sp;
+        document.getElementById('txt-money').textContent = Math.floor(G.money).toLocaleString();
+
+        normalItemDefs.forEach(item => {
+            let currentCost = G.cost[item.id];
+            if (G.artifacts.ring > 0) {
+                let discount = Math.min(0.60, G.artifacts.ring * 0.12);
+                currentCost = Math.floor(currentCost * (1 - discount));
+            }
+
+            document.getElementById(`lv-${item.id}`).textContent = `Lv.${G.lv[item.id]}`;
+            const btn = document.getElementById(`btn-${item.id}`);
+            btn.textContent = `¥${currentCost.toLocaleString()}`;
+            
+            let isMax = (item.id === 'count' && G.diceCount >= 12);
+            if (isMax) {
+                btn.textContent = "MAX";
+                btn.disabled = true;
+            } else {
+                btn.disabled = G.money < currentCost;
+            }
+        });
+
+        abilityDefs.forEach(ab => {
+            const btn = document.getElementById(`abbtn-${ab.id}`);
+            const title = document.getElementById(`abname-${ab.id}`);
+            if (G.ability[ab.id] === 1) {
+                btn.textContent = "習得済み";
+                btn.disabled = true;
+                title.style.color = "var(--green)";
+            } else {
+                btn.textContent = "習得する";
+                btn.disabled = G.sp < ab.cost;
+                title.style.color = "var(--orange)";
+            }
+        });
+
+        document.getElementById('btnArtifactRoll').disabled = G.rp < 10;
+
+        // 転生解放のボーダーを ¥5,000,000 に引き上げ、RP獲得もそれに準拠
+        let gainRP = Math.floor(G.money / 500000);
+        document.getElementById('txt-gain-rp').textContent = gainRP;
+        if (G.money >= 5000000) {
+            document.getElementById('prestigeSection').style.display = 'block';
+        } else {
+            document.getElementById('prestigeSection').style.display = 'none';
+        }
+    }
+
+    // --- ゲームループ ---
+    let autoTimer = null;
+    function startGameLoop() {
+        if (autoTimer) clearInterval(autoTimer);
+        
+        let baseInterval = 1500;
+        if (G.ability.intuition === 1) {
+            baseInterval = Math.floor(baseInterval * 0.85);
+        }
+
+        autoTimer = setInterval(() => {
+            if (G.lv.auto > 0 && !G.isRolling) {
+                executeRoll();
+            }
+        }, baseInterval);
+    }
+
+    init();
+</script>
+</body>
+</html>
